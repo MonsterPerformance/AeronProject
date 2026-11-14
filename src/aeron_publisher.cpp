@@ -25,16 +25,17 @@ auto generateRandomString(const size_t size)
 
 int main(int argc, char** argv)
 {
-    // Pin the main thread to mainLoopCoreID
-    if (2 < argc)
+    // ./aeron_publisher <mainLoopCoreID> <port>
+    if (1 < argc)
     {
-        const auto coreID = std::stoi(argv[2]);
-        pinThreadToCore(pthread_self(), coreID);
-        std::cout << "[Client] pinned to core " << coreID << std::endl;
+        const auto mainLoopCoreID = std::stoi(argv[1]);
+        // Pin the main thread to mainLoopCoreID
+        pinThreadToCore(pthread_self(), mainLoopCoreID);
+        std::cout << "[Client] pinned to core " << mainLoopCoreID << std::endl;
     }
     
-    const std::string port{(argc < 2) ? "IPC" : argv[1]};
-    const auto targetChannel{(argc < 2) ? ("aeron:ipc?endpoint=" + port) : ("aeron:udp?endpoint=127.0.0.1:" + port)};
+    const std::string port{(2 < argc) ? argv[2] : "IPC"};
+    const auto targetChannel{(2 < argc) ? ("aeron:udp?endpoint=127.0.0.1:" + port) : ("aeron:ipc?endpoint=" + port)};
     const auto ipPort{targetChannel.substr(19)};
     std::cout << "[Client] stream ID: " << streamID << std::endl;
 

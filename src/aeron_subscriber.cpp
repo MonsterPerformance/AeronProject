@@ -6,14 +6,14 @@
 #include <mpsc/multiRingQueue.hpp>
 #include "aeron_common.hpp"
 
-constexpr auto mainLoopCoreID{9};
-constexpr decltype(mainLoopCoreID) brokerCoreID[] = {4, 5, 11, 12, 13};
+auto mainLoopCoreID{11};
+decltype(mainLoopCoreID) brokerCoreID[] = {9, 4, 5, 6, 7};
 constexpr const char* targetChannel[] = {
+        "aeron:ipc?endpoint=IPC",
         "aeron:udp?endpoint=127.0.0.1:40001",
         "aeron:udp?endpoint=127.0.0.1:40002",
         "aeron:udp?endpoint=127.0.0.1:40003",
-        "aeron:udp?endpoint=127.0.0.1:40004",
-        "aeron:ipc?endpoint=IPC"
+        "aeron:udp?endpoint=127.0.0.1:40004"
     };
 constexpr auto publisherPoolSize{sizeof(targetChannel) / sizeof(targetChannel[0])};
 constexpr auto queueSize{1 << 16};
@@ -23,6 +23,31 @@ using namespace aeron;
 
 int main(int argc, char** argv)
 {
+    // ./aeron_subscriber <mainLoopCoreID> <IPCbrokerCoreID> <UDP1brokerCoreID> <UDP2brokerCoreID> <UDP3brokerCoreID> <UDP4brokerCoreID>
+    auto numberOfChannels{argc - 2};
+    if (0 < numberOfChannels)
+    {
+        mainLoopCoreID = std::stoi(argv[1]);
+        if (publisherPoolSize < numberOfChannels)
+        {
+            numberOfChannels = publisherPoolSize;
+        }
+        for (auto i = 0; i < numberOfChannels; ++i)
+        {
+            brokerCoreID[i] = std::stoi(argv[i + 2]);
+        }
+    }
+    else
+    {
+        numberOfChannels = publisherPoolSize;
+    }
+
+    std::cout << "[Server] main loop core ID = " << mainLoopCoreID << std::endl;
+    for (auto i = 0; i < numberOfChannels; ++i)
+    {
+        std::cout << "[Server] " << targetChannel[i] << ", broker core ID = " << brokerCoreID[i] << std::endl;
+    }
+
     // Pin the main thread to mainLoopCoreID
     pinThreadToCore(pthread_self(), mainLoopCoreID);
 
@@ -30,7 +55,7 @@ int main(int argc, char** argv)
     Context context; 
     Aeron aeron(context);
     std::mutex outputMutex;
-    std::vector<std::jthread> brokerThread(publisherPoolSize);
+    std::vector<std::jthread> brokerThread(numberOfChannels);
     
     // Define the thread function for each publisher channel
     const auto threadFunction = [&aeron, &lockFreeQueue, &outputMutex](const auto& channel, const auto streamID)
@@ -83,7 +108,7 @@ int main(int argc, char** argv)
     };
 
     // Start the threads for each publisher channel
-    for (auto i = 0; i < publisherPoolSize; ++i)
+    for (auto i = 0; i < numberOfChannels; ++i)
     {
         brokerThread[i] = std::jthread(threadFunction, targetChannel[i], streamID);
         // Pin each broker thread to brokerCoreID[i]
